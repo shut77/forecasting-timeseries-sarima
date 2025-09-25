@@ -5,6 +5,8 @@ from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.deterministic import CalendarFourier, DeterministicProcess
 from sklearn.preprocessing import StandardScaler
 from statsmodels.tsa.stattools import adfuller, kpss
+import os
+
 
 def visual(df, time_col='time', val_col ='total load actual',  start_points=None, end_points=None, title='Потребление - время', label = 'Потребление', xlabel='Дата', ylabel='МВт' ):
     if time_col not in df.columns:
@@ -112,5 +114,22 @@ def static_tests(df, regression='c'):
 
 
 
+def save_data(train, test, ex_tr, ex_test, folder='data'):
+    os.makedirs(folder, exist_ok=True)
+    
+    train.to_pickle(f'{folder}/train.pkl')
+    test.to_pickle(f'{folder}/test.pkl')
+    ex_tr.to_pickle(f'{folder}/ex_tr.pkl')
+    ex_test.to_pickle(f'{folder}/ex_test.pkl')
+    
+    print(f"Данные сохранены в папку {folder}")
 
+def load_data(folder='data'):
+    train = pd.read_pickle(f'{folder}/train.pkl')
+    test = pd.read_pickle(f'{folder}/test.pkl')
+    ex_tr = pd.read_pickle(f'{folder}/ex_tr.pkl')
+    ex_test = pd.read_pickle(f'{folder}/ex_test.pkl')
+    
+    print("Данные загружены!")
+    return train, test, ex_tr, ex_test
 
