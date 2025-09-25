@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 *.pkl
+__init__.py
 
 # Jupyter
 .ipynb_checkpoints/
