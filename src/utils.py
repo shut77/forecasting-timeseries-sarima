@@ -6,8 +6,9 @@ from statsmodels.tsa.deterministic import CalendarFourier, DeterministicProcess
 from sklearn.preprocessing import StandardScaler
 from statsmodels.tsa.stattools import adfuller, kpss
 import os
+from sklearn.metrics import mean_absolute_error, r2_score, mean_absolute_percentage_error
 
-
+#ФУНКЦИИ ДЛЯ EDA
 def visual(df, time_col='time', val_col ='total load actual',  start_points=None, end_points=None, title='Потребление - время', label = 'Потребление', xlabel='Дата', ylabel='МВт' ):
     if time_col not in df.columns:
         time_data = df.index
@@ -74,11 +75,15 @@ def concat_and_create_exog_fourier_for_weekend(df_fourier, df_features, freq='h'
         exog[c + '_wkend'] = exog[c] * exog['is_weekend']
     return exog
 
-def train_test_split_with_exog(df, exog, split=0.8):
+def train_test_split_with_exog(df, exog, split=0.8, freq='h'):
     df = df.loc[exog.index]
     train_size = int(len(df) * 0.8)
     train, test = df.iloc[:train_size], df.iloc[train_size:]
     exog_train, exog_test = exog.iloc[:train_size], exog.iloc[train_size:]
+    train = train.asfreq(freq)
+    test = test.asfreq(freq)
+    exog_train = exog_train.asfreq(freq)
+    exog_test = exog_test.asfreq(freq)
     return train, test, exog_train, exog_test 
 
 def exog_scaler(exog_train, exog_test):
@@ -113,8 +118,8 @@ def static_tests(df, regression='c'):
         print("Результат: p-value >= 0.05 -> Не можем отвергнуть H0. Ряд стационарен.")
 
 
-
-def save_data(train, test, ex_tr, ex_test, folder='data'):
+#ЗАГРУЗКА/ВЫГРУЗКА ДАННЫХ
+def save_data(train, test, ex_tr, ex_test, folder='../data'):
     os.makedirs(folder, exist_ok=True)
     
     train.to_pickle(f'{folder}/train.pkl')
@@ -124,7 +129,7 @@ def save_data(train, test, ex_tr, ex_test, folder='data'):
     
     print(f"Данные сохранены в папку {folder}")
 
-def load_data(folder='data'):
+def load_data(folder='../data'):
     train = pd.read_pickle(f'{folder}/train.pkl')
     test = pd.read_pickle(f'{folder}/test.pkl')
     ex_tr = pd.read_pickle(f'{folder}/ex_tr.pkl')
@@ -133,3 +138,74 @@ def load_data(folder='data'):
     print("Данные загружены!")
     return train, test, ex_tr, ex_test
 
+#ФУНКЦИИ ДЛЯ МОДЕЛИ, МЕТРИКИ
+def monitoring_callback(params):
+    print(f"Iteration: {monitoring_callback.iteration}")
+    monitoring_callback.iteration += 1
+
+def metrics(test, forecast, exp=False):
+    if isinstance(test, pd.DataFrame):
+        test = test.iloc[:, 0]  
+    if isinstance(forecast, pd.DataFrame):
+        forecast = forecast.iloc[:, 0]  
+    
+    valid_idx = test.notna() & forecast.notna()
+    
+    test = test[valid_idx]
+    forecast = forecast[valid_idx]
+
+    cumulative_mae = []
+    for i in range(2, len(test) + 1):
+        if exp is False:
+            mae = mean_absolute_error(test[:i], forecast[:i])
+            cumulative_mae.append(mae)
+        else:
+            mae = mean_absolute_error(np.exp(test[:i]), np.exp(forecast[:i]))
+            cumulative_mae.append(mae)
+    print(f'Метрика MAE: {mae}')
+    plt.figure(figsize=(12, 6))
+    plt.axvline(x=24*90, color='red', linestyle='--', linewidth=2, label='90 дней')
+    plt.plot(range(2, len(test) + 1), cumulative_mae, marker='o')
+    plt.xlabel('Количество объектов в тестовой выборке')
+    plt.ylabel('MAE')
+    plt.title('Зависимость MAE от размера тестовой выборки')
+    plt.grid(True)
+    plt.show()
+    
+    cumulative_R2_score = []
+    for i in range(2, len(test) + 1):
+        if exp is False:
+            R2_score = r2_score(test[:i], forecast[:i])
+            cumulative_R2_score.append(R2_score)
+        else:
+            R2_score = r2_score(np.exp(test[:i]), np.exp(forecast[:i]))
+            cumulative_R2_score.append(R2_score)
+    print(f'Метрика R2_score: {R2_score}')
+    plt.figure(figsize=(12, 6))
+    plt.axvline(x=24*90, color='red', linestyle='--', linewidth=2, label='90 дней')
+    plt.plot(range(2, len(test) + 1), cumulative_R2_score, marker='o')
+    plt.xlabel('Количество объектов в тестовой выборке')
+    plt.ylabel('R2_score')
+    plt.title('Зависимость R2_score от размера тестовой выборки')
+    plt.grid(True)
+    plt.show()
+
+    cumulative_MAPE = []
+    for i in range(2, len(test) + 1):
+        if exp is False:
+            mape = mean_absolute_percentage_error(test[:i], forecast[:i])
+            cumulative_MAPE.append(mape)
+        else:
+            mape = mean_absolute_percentage_error(np.exp(test[:i]), np.exp(forecast[:i]))
+            cumulative_MAPE.append(mape)
+    print(f'Метрика MAPE: {mape}')
+    plt.figure(figsize=(12, 6))
+    plt.axvline(x=24*90, color='red', linestyle='--', linewidth=2, label='90 дней')
+    plt.plot(range(2, len(test) + 1), cumulative_MAPE, marker='o')
+    plt.xlabel('Количество объектов в тестовой выборке')
+    plt.ylabel('MAPE')
+    plt.title('Зависимость MAPE от размера тестовой выборки')
+    plt.grid(True)
+    plt.show()
+    
+    return mae, R2_score, mape
